@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(smap_classifiers)
+project(smap-perception-yolo-v5)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -46,10 +46,10 @@ install(DIRECTORY
 )
 
 # Install Python executables
-#install(PROGRAMS
-#  scripts/test.py
-#  DESTINATION lib/${PROJECT_NAME}
-#)
+install(PROGRAMS
+  smap-perception-yolo-v5/yolo-v5-node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

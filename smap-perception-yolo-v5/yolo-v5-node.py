@@ -3,8 +3,7 @@
 from std_srvs.srv import Empty
 from std_msgs.msg import String
 #from smap_classification_wrapper.smap_classification_wrapper import classification_wrapper
-from smap_classification_wrapper.classification_wrapper import classification_wrapper
-from smap_classification_wrapper.classification_wrapper import main
+from smap_classification_wrapper.classification_wrapper import classification_wrapper,main
 from smap_interfaces.msg import SmapData, SmapPrediction
 
 class yolo_v5(classification_wrapper):
