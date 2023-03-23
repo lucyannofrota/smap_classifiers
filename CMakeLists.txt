@@ -47,7 +47,7 @@ install(DIRECTORY
 
 # Install Python executables
 install(PROGRAMS
-  smap-perception-yolo-v5/yolo-v5-node.py
+  smap-perception-yolo-v5/yolo_v5_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
