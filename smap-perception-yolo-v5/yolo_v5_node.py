@@ -14,30 +14,35 @@ import json
 
 
 
-
+import os
 
 class yolo_v5(classification_wrapper):
 
-    def __init__(self,classifier_name='yolo_v5'):
+    def __init__(self,detector_name='yolo_v5'):
         super().__init__(
-            classifier_name=classifier_name,
-            classifier_type='object',
-            classifier_architecture='yolo_v5'
+            detector_name=detector_name,
+            detector_type='object',
+            detector_architecture='yolo_v5'
         )
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model_file = "../yolov5/yolov5s.torchscript"
         
     def predict(self,data):
         msg = SmapPrediction()
-        msg.classifier_id = 5
+        msg.detector_id = 5
         self.publisher.publish(msg)
 
-    def _load_model(self):
-        super(yolo_v5, self)._load_model()
-        self.model_file=0
-        model_file = str(self.model_file)
+    def _load_model(self): # Return True when an error occurs
+        if super()._load_model():  
+            return True
+        print('model_file')
+        print(self.model_file)
+        self.model_file = str(self.model_file)
         extra_files = {'config.txt': ''}  # model metadata
-        self.model = torch.jit.load(model_file, _extra_files=extra_files, map_location=self.device)
+        print('pre')
+        self.model = torch.jit.load(self.model_file, _extra_files=extra_files, map_location=self.device)
+        print(self.model)
         #model.half() if fp16 else model.float()
         if extra_files['config.txt']:  # load metadata dict
             d = json.loads(extra_files['config.txt'],
@@ -46,11 +51,34 @@ class yolo_v5(classification_wrapper):
             self.stride, self.classes = int(d['stride']), d['names']
 
         self.get_logger().warning("yolo_load_model")
-        pass
+        return False
+
+
+def _load_model(self): # Return True when an error occurs
+
+    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    self.model_file = "yolov5/yolov5s.torchscript"
+    print('model_file')
+    print(self.model_file)
+    self.model_file = str(self.model_file)
+    
+    extra_files = {'config.txt': ''}  # model metadata
+    print('pre')
+    self.model = torch.jit.load(self.model_file, _extra_files=extra_files, map_location=self.device)
+    print(self.model)
+    #model.half() if fp16 else model.float()
+    if extra_files['config.txt']:  # load metadata dict
+        d = json.loads(extra_files['config.txt'],
+                        object_hook=lambda d: {int(k) if k.isdigit() else k: v
+                                                for k, v in d.items()})
+        self.stride, self.classes = int(d['stride']), d['names']
+
+    self.get_logger().warning("yolo_load_model")
+    return False
 
 if __name__ == '__main__':
 
-    classifier_args = {
+    detector_args = {
         'name': 'yolo_v5'
     }
-    main(classifier_class=yolo_v5,classifier_args=classifier_args)
+    main(detector_class=yolo_v5,detector_args=detector_args)

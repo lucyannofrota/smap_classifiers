@@ -42,6 +42,7 @@ ament_python_install_package(${PROJECT_NAME})
 # Install launch files
 install(DIRECTORY
   launch
+  yolov5
   DESTINATION share/${PROJECT_NAME}/
 )
 
