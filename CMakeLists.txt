@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(smap-perception-yolo-v5)
+project(smap_perception_yolo_v5)
 
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
@@ -43,12 +43,15 @@ ament_python_install_package(${PROJECT_NAME})
 install(DIRECTORY
   launch
   yolov5
+  yolov5/models
+  utils
   DESTINATION share/${PROJECT_NAME}/
 )
 
 # Install Python executables
 install(PROGRAMS
-  smap-perception-yolo-v5/yolo_v5_node.py
+  smap_perception_yolo_v5/yolo_v5_node.py
+  utils
   DESTINATION lib/${PROJECT_NAME}
 )
 
