@@ -14,12 +14,8 @@ import json
 
 # YOLO_V5 functionalities adapted from https://github.com/ultralytics/yolov5/blob/master/models/common.py
 
-import time
-import torchvision
-import numpy as np
-import math
+from detect import run
 
-from smap_perception_yolo_v5.yolov5.detect import run
 
 class yolo_v5(classification_wrapper):
 
@@ -31,10 +27,12 @@ class yolo_v5(classification_wrapper):
         )
 
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model_file="/workspace/install/share/smap_perception_yolo_v5/yolov5/yolov5s.torchscript"
+        self.model_file="/workspace/install/share/smap_perception_yolo_v5/weights/yolov5s.torchscript"
         self.imgsz=(1, 3, 640, 640)
 
-        run()
+        run(
+            weights=self.model_file
+        )
 
         #self.br = CvBridge()
         

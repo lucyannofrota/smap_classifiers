@@ -29,7 +29,7 @@ def generate_launch_description():
         "model", default_value=TextSubstitution(
         text=PathJoinSubstitution([
             FindPackageShare('smap_perception_yolo_v5'),
-            'yolov5/yolov5s.torchscript'
+            'weights/yolov5s.torchscript'
             ]).perform(LaunchContext())
         ),
         description='Model path [*.torchscript]'

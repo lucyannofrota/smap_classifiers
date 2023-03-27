@@ -39,19 +39,17 @@ include_directories(include)
 # Install Python modules
 ament_python_install_package(${PROJECT_NAME})
 
-# Install launch files
+# Install shared files
 install(DIRECTORY
-  launch
-  yolov5
-  yolov5/models
-  utils
+  launch/
+  weights
   DESTINATION share/${PROJECT_NAME}/
 )
 
 # Install Python executables
 install(PROGRAMS
-  smap_perception_yolo_v5/yolo_v5_node.py
-  utils
+  yolo_v5_node.py
+  #scripts/yolo_v5_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
