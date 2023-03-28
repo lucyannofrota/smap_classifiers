@@ -14,9 +14,13 @@ import json
 
 # YOLO_V5 functionalities adapted from https://github.com/ultralytics/yolov5/blob/master/models/common.py
 
+
+# ultralytics
 from detect import run
 from utils.torch_utils import select_device, smart_inference_mode
 from models.common import DetectMultiBackend
+from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
+                           increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
 
 class yolo_v5(classification_wrapper):
 
@@ -30,7 +34,7 @@ class yolo_v5(classification_wrapper):
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model_file="/workspace/install/share/smap_perception_yolo_v5/weights/yolov5s.torchscript"
         self.model_description_file="/workspace/install/share/smap_perception_yolo_v5/data/coco128.yaml"
-        self.imgsz=(1, 3, 640, 640)
+        self.imgsz=(640, 640)
 
         #run(
         #    weights=self.model_file
@@ -52,7 +56,7 @@ class yolo_v5(classification_wrapper):
 
         print('<Pred')
         
-        source = str(source)
+        #source = str(source)
 
         #img=torch.from_numpy(img).to(self.model.device)
         #img=img.float()
@@ -97,19 +101,28 @@ class yolo_v5(classification_wrapper):
         #    self.stride, self.classes = int(d['stride']), d['names']
 
         # Load model
-        model = DetectMultiBackend(weights=self.model_file,
+        self.model = DetectMultiBackend(weights=self.model_file,
                                    device=self.device,
                                    dnn=False,
-                                   data=data, fp16=half)
-        stride, names, pt = model.stride, model.names, model.pt
-        imgsz = check_img_size(imgsz, s=stride)  # check image size
+                                   data=self.model_description_file,
+                                   fp16=False
+        )
+        self.stride, self.names, self.pt = self.model.stride, self.model.names, self.model.pt
+        self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check image size
+
         self.get_logger().info("{} loaded.".format(self.model_file))
         return False
     
+    def _dataloader(self): # Return True when an error occurs
+        bs = 1  # batch_size
+        #view_img = check_imshow(warn=True)
+        #dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+        #bs = len(dataset)
+        #vid_path, vid_writer = [None] * bs, [None] * bs
+
     def _model_warmup(self):
         self.get_logger().info('Model warming up...')
-        img = torch.empty(*self.imgsz, dtype=torch.float, device=self.device)  # input
-        self.model.forward(img)
+        self.model.warmup(imgsz=(1, 3, *self.imgsz))  # warmup
 
 
 
