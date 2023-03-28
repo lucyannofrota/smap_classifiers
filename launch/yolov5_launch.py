@@ -35,11 +35,22 @@ def generate_launch_description():
         description='Model path [*.torchscript]'
     )
 
+    model_description_launch_arg = DeclareLaunchArgument(
+        "model_description", default_value=TextSubstitution(
+        text=PathJoinSubstitution([
+            FindPackageShare('smap_perception_yolo_v5'),
+            'data/coco128.yaml'
+            ]).perform(LaunchContext())
+        ),
+        description='Model description path [*.yaml]'
+    )
+
     yolo_v5_node = launch_ros.actions.Node(
             package='smap_perception_yolo_v5',
             executable='yolo_v5_node.py',
             parameters=[{
-                "model": LaunchConfiguration('model')
+                "model": LaunchConfiguration('model'),
+                "model_description": LaunchConfiguration('model_description')
             }],
             output='screen',
             arguments=[('__log_level:=debug')],
@@ -48,6 +59,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         model_launch_arg,
+        model_description_launch_arg,
         yolo_v5_node
     ])
 

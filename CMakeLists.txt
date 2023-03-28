@@ -43,6 +43,9 @@ ament_python_install_package(${PROJECT_NAME})
 install(DIRECTORY
   launch/
   weights
+  data
+  models
+  segment
   DESTINATION share/${PROJECT_NAME}/
 )
 
