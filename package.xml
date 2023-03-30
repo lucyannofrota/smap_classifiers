@@ -16,7 +16,6 @@
   <depend>smap_interfaces</depend>
   <depend>smap_classification_wrapper</depend>
   <depend>libopencv-dev</depend>
-  <depend>cv_bridge</depend>
 
 
   <test_depend>ament_lint_auto</test_depend>
