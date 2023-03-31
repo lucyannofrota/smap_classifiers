@@ -15,6 +15,7 @@
   <depend>sensor_msgs</depend>
   <depend>smap_interfaces</depend>
   <depend>smap_classification_wrapper</depend>
+  <depend>python-numpy</depend>
   <depend>libopencv-dev</depend>
 
 

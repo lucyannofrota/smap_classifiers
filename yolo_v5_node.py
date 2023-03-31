@@ -14,8 +14,7 @@ import numpy as np
 from models.common import DetectMultiBackend
 from utils.plots import colors
 from utils.plots import Annotator, colors
-from utils.augmentations import letterbox
-from utils.general import Profile, check_img_size, non_max_suppression, scale_boxes
+from utils.general import check_img_size, non_max_suppression, scale_boxes
 
 # TODO: Separar pre-processing. inference e nms
 
@@ -32,12 +31,20 @@ class yolo_v5(classification_wrapper):
         self.model_file="/workspace/install/share/smap_perception_yolo_v5/weights/yolov5s.torchscript"
         self.model_description_file="/workspace/install/share/smap_perception_yolo_v5/data/coco128.yaml"
         self.imgsz=(640, 640)
-        self.conf_thres=0.25  # confidence threshold
+
+        # NMS
+        self.conf_thres=0.8  # confidence threshold
         self.iou_thres=0.45  # NMS IOU threshold
         self.max_det=1000  # maximum detections per image
         self.classes=None  # filter by class: --class 0, or --class 0 2 3
         self.agnostic_nms=False  # class-agnostic NMS
         self.half=False
+
+        self.counter = 0
+        self.pre_vals = []
+        self.inference_vals = []
+        self.nms_vals = []
+        self.post_vals = []
 
     def initialization(self):
         self.get_logger().debug("Initializing topics")
@@ -54,7 +61,7 @@ class yolo_v5(classification_wrapper):
         # pre-processing
         with self.pre_processing_tim:
             self._img_original = self._cv_bridge.imgmsg_to_cv2(msg.rgb_image, "bgr8")
-            self._img_processed = letterbox(self._img_original, self.imgsz, stride=self.stride, auto=self.model.pt)[0]  # padded resize
+            self._img_processed = self.letterbox(self._img_original, self.imgsz, stride=self.stride, auto=self.model.pt)[0]  # padded resize
 
             self._img_processed = self._img_processed.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
             self._img_processed = np.ascontiguousarray(self._img_processed)  # contiguous
@@ -123,6 +130,31 @@ class yolo_v5(classification_wrapper):
         resp_msg = SmapPrediction()
         resp_msg.module_id = self.module_id
         self.prediction.publish(resp_msg)
+        self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
+
+
+    def mean_spead_metrics(self, pre_processing_tim, inference_tim, nms_tim, post_processing_tim):
+        if len(self.pre_vals) >= 128:
+            self.pre_vals=self.pre_vals[1:]
+            self.inference_vals=self.inference_vals[1:]
+            self.nms_vals=self.nms_vals[1:]
+            self.post_vals=self.post_vals[1:]
+        else:
+            self.counter+=1
+
+        self.pre_vals.append(pre_processing_tim)
+        self.inference_vals.append(inference_tim)
+        self.nms_vals.append(nms_tim)
+        self.post_vals.append(post_processing_tim)
+
+        self.get_logger().warn("Mean Values [{}] | {:0.1f}ms pre-process, {:0.1f}ms inference, {:0.1f}ms nms, {:0.1f}ms post-processing".format(
+            self.counter,
+            sum(self.pre_vals)/len(self.pre_vals),
+            sum(self.inference_vals)/len(self.pre_vals),
+            sum(self.nms_vals)/len(self.pre_vals),
+            sum(self.post_vals)/len(self.pre_vals)
+        ))
+
 
     def load_model(self): # Return True when an error occurs
         if super().load_model():  
