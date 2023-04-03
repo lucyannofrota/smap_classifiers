@@ -46,7 +46,7 @@ class yolo_v5(classification_wrapper):
 
 
         # TODO: Create parameter
-        self.view_img=True
+        #self.view_img=True
         self.hide_labels=False
         self.hide_conf=False
 
@@ -54,7 +54,8 @@ class yolo_v5(classification_wrapper):
         self.get_logger().debug("Initializing topics")
         self.subscription=self.create_subscription(SmapData, '/smap/sampler/data', self.predict, 10,callback_group= self._reentrant_cb_group)
         self.prediction=self.create_publisher(SmapPrediction, '/smap/perception/predictions', 10,callback_group= self._reentrant_cb_group)
-        self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group= self._reentrant_cb_group)
+        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+            self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group= self._reentrant_cb_group)
         return True
 
     def predict(self,msg):
@@ -106,8 +107,9 @@ class yolo_v5(classification_wrapper):
                         s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                     # Write results
-                    for *xyxy, conf, cls in reversed(det):
-                        if self.view_img:  # Add bbox to image
+                    if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+                        for *xyxy, conf, cls in reversed(det):
+                            # Add bbox to image
                             c = int(cls)  # integer class
                             label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
                             annotator.box_label(xyxy, label, color=colors(c, True))
@@ -116,22 +118,22 @@ class yolo_v5(classification_wrapper):
                 self._img_original = annotator.result()
                 #view_img=False
 
-        self.get_logger().debug(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms")
+        self.get_logger().info(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms",throttle_duration_sec=1)
         
         # Print results
         self.get_logger().debug(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms nms, %.1fms post-processing | per image at shape {(1, 3, *self.imgsz)}' % (self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t))
         self.get_logger().debug('Total process time: {:0.1f}ms | Should be capable of: {:0.1f} fps'.format(self.get_callback_time(),1E3/self.get_callback_time()))
         self.get_logger().debug(f'Total process time: %.1fms' % self.get_callback_time())
-        
 
-        if self.view_img:
+        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
             self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(self._img_original))
         
         resp_msg = SmapPrediction()
         resp_msg.module_id = self.module_id
         self.prediction.publish(resp_msg)
-        self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
 
+        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+            self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
 
     def mean_spead_metrics(self, pre_processing_tim, inference_tim, nms_tim, post_processing_tim):
         if len(self.pre_vals) >= 128:
@@ -148,13 +150,14 @@ class yolo_v5(classification_wrapper):
         self.post_vals.append(post_processing_tim)
 
         self.get_logger().warn("Mean Values [{}] | {:0.1f}ms pre-process, {:0.1f}ms inference, {:0.1f}ms nms, {:0.1f}ms post-processing".format(
-            self.counter,
-            sum(self.pre_vals)/len(self.pre_vals),
-            sum(self.inference_vals)/len(self.pre_vals),
-            sum(self.nms_vals)/len(self.pre_vals),
-            sum(self.post_vals)/len(self.pre_vals)
-        ))
-
+                self.counter,
+                sum(self.pre_vals)/len(self.pre_vals),
+                sum(self.inference_vals)/len(self.pre_vals),
+                sum(self.nms_vals)/len(self.pre_vals),
+                sum(self.post_vals)/len(self.pre_vals)
+            ),
+            throttle_duration_sec=5
+        )
 
     def load_model(self): # Return True when an error occurs
         if super().load_model():  
