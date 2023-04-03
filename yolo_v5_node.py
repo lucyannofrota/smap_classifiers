@@ -4,9 +4,8 @@
 
 from sensor_msgs.msg import Image
 from smap_classification_wrapper.classification_wrapper import classification_wrapper,main
-from smap_interfaces.msg import SmapData, SmapPrediction, SmapDetectionDebug
+from smap_interfaces.msg import SmapData, SmapPrediction
 
-import cv2
 import torch
 import numpy as np
 
@@ -36,7 +35,6 @@ class yolo_v5(classification_wrapper):
         self.conf_thres=0.8  # confidence threshold
         self.iou_thres=0.45  # NMS IOU threshold
         self.max_det=1000  # maximum detections per image
-        self.classes=None  # filter by class: --class 0, or --class 0 2 3
         self.agnostic_nms=False  # class-agnostic NMS
         self.half=False
 
@@ -45,6 +43,12 @@ class yolo_v5(classification_wrapper):
         self.inference_vals = []
         self.nms_vals = []
         self.post_vals = []
+
+
+        # TODO: Create parameter
+        self.view_img=True
+        self.hide_labels=False
+        self.hide_conf=False
 
     def initialization(self):
         self.get_logger().debug("Initializing topics")
@@ -79,7 +83,7 @@ class yolo_v5(classification_wrapper):
 
         # nms
         with self.nms_tim:
-            pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, self.classes, self.agnostic_nms, max_det=self.max_det)
+            pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, None, self.agnostic_nms, max_det=self.max_det)
 
         # Apply Classifier
         #print('Classify')
@@ -91,7 +95,7 @@ class yolo_v5(classification_wrapper):
             s=''
             for i, det in enumerate(pred):  # per image
                 s += '%gx%g ' % self._img_processed.shape[2:]  # print string
-                annotator = Annotator(self._img_original, line_width=3, example=str(self.names))
+                annotator = Annotator(self._img_original, line_width=3, example=str(self.classes))
                 if len(det):
                     # Rescale boxes from self._img_processed to self._img_original size
                     det[:, :4] = scale_boxes(self._img_processed.shape[2:], det[:, :4], self._img_original.shape).round()
@@ -99,17 +103,13 @@ class yolo_v5(classification_wrapper):
                     # Print results
                     for c in det[:, 5].unique():
                         n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {self.names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                        s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                     # Write results
-                    # TODO: Create parameter
-                    view_img=True
-                    hide_labels=False
-                    hide_conf=False
                     for *xyxy, conf, cls in reversed(det):
-                        if view_img:  # Add bbox to image
+                        if self.view_img:  # Add bbox to image
                             c = int(cls)  # integer class
-                            label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
+                            label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
                             annotator.box_label(xyxy, label, color=colors(c, True))
 
                 # Stream results
@@ -124,7 +124,7 @@ class yolo_v5(classification_wrapper):
         self.get_logger().debug(f'Total process time: %.1fms' % self.get_callback_time())
         
 
-        if view_img:
+        if self.view_img:
             self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(self._img_original))
         
         resp_msg = SmapPrediction()
@@ -167,7 +167,7 @@ class yolo_v5(classification_wrapper):
                                    data=self.model_description_file,
                                    fp16=self.half
         )
-        self.stride, self.names, self.pt = self.model.stride, self.model.names, self.model.pt
+        self.stride, self.classes, self.pt = self.model.stride, self.model.names, self.model.pt
         self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check image size
 
         return False

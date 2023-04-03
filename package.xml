@@ -16,7 +16,7 @@
   <depend>smap_interfaces</depend>
   <depend>smap_classification_wrapper</depend>
   <depend>python-numpy</depend>
-  <depend>libopencv-dev</depend>
+  <!-- <depend>libopencv-dev</depend> -->
 
 
   <test_depend>ament_lint_auto</test_depend>
