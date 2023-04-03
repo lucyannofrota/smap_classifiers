@@ -17,8 +17,8 @@ from launch.substitutions import LaunchConfiguration
 import yaml
 #from yaml import load
 from yaml import CLoader as Loader
-#from smap_classification_wrapper.classification_wrapper import main
-#from smap_perception_yolo_v5.yolo_v5_node import yolo_v5
+#from smap_perception_wrapper.classification_wrapper import main
+#from smap_yolo_v5.yolo_v5_node import yolo_v5
 import launch
 import launch_ros.actions
 
@@ -28,7 +28,7 @@ def generate_launch_description():
     model_launch_arg = DeclareLaunchArgument(
         "model", default_value=TextSubstitution(
         text=PathJoinSubstitution([
-            FindPackageShare('smap_perception_yolo_v5'),
+            FindPackageShare('smap_yolo_v5'),
             'weights/yolov5s.torchscript'
             ]).perform(LaunchContext())
         ),
@@ -38,7 +38,7 @@ def generate_launch_description():
     model_description_launch_arg = DeclareLaunchArgument(
         "model_description", default_value=TextSubstitution(
         text=PathJoinSubstitution([
-            FindPackageShare('smap_perception_yolo_v5'),
+            FindPackageShare('smap_yolo_v5'),
             'data/coco128.yaml'
             ]).perform(LaunchContext())
         ),
@@ -46,7 +46,7 @@ def generate_launch_description():
     )
 
     yolo_v5_node = launch_ros.actions.Node(
-            package='smap_perception_yolo_v5',
+            package='smap_yolo_v5',
             executable='yolo_v5_node.py',
             parameters=[{
                 "model": LaunchConfiguration('model'),

@@ -3,7 +3,9 @@
 # Node based on https://github.com/ultralytics/yolov5
 
 from sensor_msgs.msg import Image
-from smap_classification_wrapper.classification_wrapper import classification_wrapper, main
+from smap_perception_wrapper.perception_wrapper import perception_wrapper, main
+#from smap_perception_wrapper.perception_wrapper import main
+#from smap_perception_wrapper.smap_perception_wrapper import perception_wrapper, main
 from smap_interfaces.msg import SmapData, SmapObject, SmapDetections
 
 import torch
@@ -17,7 +19,7 @@ from utils.general import check_img_size, non_max_suppression, scale_boxes
 
 # TODO: Separar pre-processing. inference e nms
 
-class yolo_v5(classification_wrapper):
+class yolo_v5(perception_wrapper):
 
     def __init__(self,detector_name='yolo_v5'):
         super().__init__(
@@ -27,8 +29,8 @@ class yolo_v5(classification_wrapper):
         )
 
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model_file="/workspace/install/share/smap_perception_yolo_v5/weights/yolov5s.torchscript"
-        self.model_description_file="/workspace/install/share/smap_perception_yolo_v5/data/coco128.yaml"
+        self.model_file="/workspace/install/share/smap_yolo_v5/weights/yolov5s.torchscript"
+        self.model_description_file="/workspace/install/share/smap_yolo_v5/data/coco128.yaml"
         self.imgsz=(640, 640)
 
         # NMS
