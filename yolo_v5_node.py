@@ -3,8 +3,8 @@
 # Node based on https://github.com/ultralytics/yolov5
 
 from sensor_msgs.msg import Image
-from smap_classification_wrapper.classification_wrapper import classification_wrapper,main
-from smap_interfaces.msg import SmapData, SmapPrediction
+from smap_classification_wrapper.classification_wrapper import classification_wrapper, main
+from smap_interfaces.msg import SmapData, SmapObject, SmapDetections
 
 import torch
 import numpy as np
@@ -46,14 +46,13 @@ class yolo_v5(classification_wrapper):
 
 
         # TODO: Create parameter
-        #self.view_img=True
         self.hide_labels=False
         self.hide_conf=False
 
     def initialization(self):
         self.get_logger().debug("Initializing topics")
         self.subscription=self.create_subscription(SmapData, '/smap/sampler/data', self.predict, 10,callback_group= self._reentrant_cb_group)
-        self.prediction=self.create_publisher(SmapPrediction, '/smap/perception/predictions', 10,callback_group= self._reentrant_cb_group)
+        self.detections=self.create_publisher(SmapDetections, '/smap/perception/predictions', 10,callback_group= self._reentrant_cb_group)
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
             self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group= self._reentrant_cb_group)
         return True
@@ -91,32 +90,40 @@ class yolo_v5(classification_wrapper):
         #if self.classify:
         #    pred = apply_classifier(pred, self.modelc, img, pred)
 
+
         # Process detections
+        resp_msg = SmapDetections()
         with self.post_processing_tim:
             s=''
+            if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+                annotator = Annotator(self._img_original, line_width=3, example=str(self.classes))
             for i, det in enumerate(pred):  # per image
                 s += '%gx%g ' % self._img_processed.shape[2:]  # print string
-                annotator = Annotator(self._img_original, line_width=3, example=str(self.classes))
                 if len(det):
                     # Rescale boxes from self._img_processed to self._img_original size
                     det[:, :4] = scale_boxes(self._img_processed.shape[2:], det[:, :4], self._img_original.shape).round()
-
                     # Print results
                     for c in det[:, 5].unique():
                         n = (det[:, 5] == c).sum()  # detections per class
                         s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                     # Write results
-                    if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-                        for *xyxy, conf, cls in reversed(det):
-                            # Add bbox to image
-                            c = int(cls)  # integer class
-                            label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
+                    for *xyxy, conf, cls in reversed(det):
+                        c = int(cls)  # integer class
+                        label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
+                        obj = SmapObject()
+                        obj.label = c
+                        obj.bounding_box.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
+                        obj.bounding_box.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
+                        resp_msg.objects.append(obj)
+
+                        # Add bbox to image
+                        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
                             annotator.box_label(xyxy, label, color=colors(c, True))
 
-                # Stream results
-                self._img_original = annotator.result()
-                #view_img=False
+                    # Stream results
+                    if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+                        self._img_original = annotator.result()
 
         self.get_logger().info(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms",throttle_duration_sec=1)
         
@@ -128,9 +135,8 @@ class yolo_v5(classification_wrapper):
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
             self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(self._img_original))
         
-        resp_msg = SmapPrediction()
         resp_msg.module_id = self.module_id
-        self.prediction.publish(resp_msg)
+        self.detections.publish(resp_msg)
 
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
             self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
