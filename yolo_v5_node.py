@@ -29,7 +29,7 @@ class yolo_v5(perception_wrapper):
         )
 
         self.device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model_file="/workspace/install/share/smap_yolo_v5/weights/yolov5s.torchscript"
+        self.model_file="/workspace/install/share/smap_yolo_v5/weights/yolov5s.engine"
         self.model_description_file="/workspace/install/share/smap_yolo_v5/data/coco128.yaml"
         self.imgsz=(640, 640)
 
@@ -157,12 +157,20 @@ class yolo_v5(perception_wrapper):
         self.nms_vals.append(nms_tim)
         self.post_vals.append(post_processing_tim)
 
-        self.get_logger().warn("Mean Values [{}] | {:0.1f}ms pre-process, {:0.1f}ms inference, {:0.1f}ms nms, {:0.1f}ms post-processing".format(
+        ms=[
+            sum(self.pre_vals)/len(self.pre_vals),
+            sum(self.inference_vals)/len(self.pre_vals),
+            sum(self.nms_vals)/len(self.pre_vals),
+            sum(self.post_vals)/len(self.pre_vals)
+        ]
+
+        self.get_logger().warn("Mean Values [{}] | {:0.1f}ms pre-process, {:0.1f}ms inference, {:0.1f}ms nms, {:0.1f}ms post-processing | Total: {:0.1f}ms".format(
                 self.counter,
-                sum(self.pre_vals)/len(self.pre_vals),
-                sum(self.inference_vals)/len(self.pre_vals),
-                sum(self.nms_vals)/len(self.pre_vals),
-                sum(self.post_vals)/len(self.pre_vals)
+                ms[0],
+                ms[1],
+                ms[2],
+                ms[3],
+                sum(ms)
             ),
             throttle_duration_sec=5
         )

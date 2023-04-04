@@ -29,10 +29,10 @@ def generate_launch_description():
         "model", default_value=TextSubstitution(
         text=PathJoinSubstitution([
             FindPackageShare('smap_yolo_v5'),
-            'weights/yolov5s.torchscript'
+            'weights/yolov5s.engine'
             ]).perform(LaunchContext())
         ),
-        description='Model path [*.torchscript]'
+        description='Model path [*.engine]'
     )
 
     model_description_launch_arg = DeclareLaunchArgument(
