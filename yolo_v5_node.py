@@ -52,12 +52,11 @@ class yolo_v5(perception_wrapper):
         self.hide_conf=False
 
     def initialization(self):
-        self.get_logger().debug("Initializing topics")
-        self.subscription=self.create_subscription(SmapData, '/smap/sampler/data', self.predict, 10,callback_group= self._reentrant_cb_group)
-        self.detections=self.create_publisher(SmapDetections, '/smap/perception/predictions', 10,callback_group= self._reentrant_cb_group)
-        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-            self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group= self._reentrant_cb_group)
-        return True
+        if super().initialization():  
+            if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+                self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group= self._reentrant_cb_group)
+            return True
+        return False
 
     def predict(self,msg):
         #msg.stamped_pose
