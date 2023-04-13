@@ -93,7 +93,7 @@ class yolo_v5(perception_wrapper):
 
 
         # Process detections
-        resp_msg = SmapDetections()
+        objects = []
         with self.post_processing_tim:
             s=''
             if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
@@ -114,9 +114,9 @@ class yolo_v5(perception_wrapper):
                         label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
                         obj = SmapObject()
                         obj.label = c
-                        obj.bounding_box.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
-                        obj.bounding_box.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
-                        resp_msg.objects.append(obj)
+                        obj.bounding_box_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
+                        obj.bounding_box_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
+                        objects.append(obj)
 
                         # Add bbox to image
                         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
@@ -135,12 +135,17 @@ class yolo_v5(perception_wrapper):
 
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
             self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(self._img_original))
-        
-        resp_msg.module_id = self.module_id
-        self.detections.publish(resp_msg)
+    
 
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
             self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
+        
+        # self.detections.publish(resp_msg)
+
+        resp_msg = SmapDetections()
+        resp_msg.objects = objects
+
+        return resp_msg
 
     def mean_spead_metrics(self, pre_processing_tim, inference_tim, nms_tim, post_processing_tim):
         if len(self.pre_vals) >= 128:
