@@ -34,7 +34,7 @@ class yolo_v5(perception_wrapper):
         self.imgsz=(640, 640)
 
         # NMS
-        self.conf_thres=0.8  # confidence threshold
+        self.conf_thres=0.35  # confidence threshold
         self.iou_thres=0.45  # NMS IOU threshold
         self.max_det=1000  # maximum detections per image
         self.agnostic_nms=False  # class-agnostic NMS
@@ -51,10 +51,11 @@ class yolo_v5(perception_wrapper):
         self.hide_labels=False
         self.hide_conf=False
 
+
     def initialization(self):
         if super().initialization():  
-            if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-                self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group= self._reentrant_cb_group)
+            # TODO: Debug parameter
+            self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group=self._reentrant_cb_group)
             return True
         return False
 
@@ -64,45 +65,52 @@ class yolo_v5(perception_wrapper):
         #msg.pointcloud
 
         # pre-processing
-        with self.pre_processing_tim:
-            self._img_original = self._cv_bridge.imgmsg_to_cv2(msg.rgb_image, "bgr8")
-            self._img_processed = self.letterbox(self._img_original, self.imgsz, stride=self.stride, auto=self.model.pt)[0]  # padded resize
+        try:
+            with self.pre_processing_tim:
+                _img_original = self._cv_bridge.imgmsg_to_cv2(msg.rgb_image, "bgr8")
+                _img_processed = self.letterbox(_img_original, self.imgsz, stride=self.stride, auto=self.model.pt)[0]  # padded resize
 
-            self._img_processed = self._img_processed.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
-            self._img_processed = np.ascontiguousarray(self._img_processed)  # contiguous
+                _img_processed = _img_processed.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+                _img_processed = np.ascontiguousarray(_img_processed)  # contiguous
 
-            self._img_processed = torch.from_numpy(self._img_processed).to(self.model.device)
-            self._img_processed = self._img_processed.half() if self.model.fp16 else self._img_processed.float()  # uint8 to fp16/32
-            self._img_processed /= 255  # 0 - 255 to 0.0 - 1.0
-            if len(self._img_processed.shape) == 3:
-                self._img_processed = self._img_processed[None]  # expand for batch dim
-
+                _img_processed = torch.from_numpy(_img_processed).to(self.model.device)
+                _img_processed = _img_processed.half() if self.model.fp16 else _img_processed.float()  # uint8 to fp16/32
+                _img_processed /= 255  # 0 - 255 to 0.0 - 1.0
+                if len(_img_processed.shape) == 3:
+                    _img_processed = _img_processed[None]  # expand for batch dim
+        except (Exception, RuntimeError)  as e:
+            self.get_logger().error("yolo_v5/predict/pre_processing")
 
         # inference
         with self.inference_tim:
-            pred = self.model(self._img_processed, augment=False)
+            try:
+                pred = self.model(_img_processed, augment=False)
+            except (Exception, RuntimeError)  as e:
+                self.get_logger().error("yolo_v5/predict/inference")
 
         # nms
         with self.nms_tim:
-            pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, None, self.agnostic_nms, max_det=self.max_det)
+            try:
+                pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, None, self.agnostic_nms, max_det=self.max_det)
+            except (Exception, RuntimeError)  as e:
+                self.get_logger().error("yolo_v5/predict/nms")
 
         # Apply Classifier
         #print('Classify')
         #if self.classify:
         #    pred = apply_classifier(pred, self.modelc, img, pred)
 
-
         # Process detections
         objects = []
         with self.post_processing_tim:
             s=''
             if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-                annotator = Annotator(self._img_original, line_width=3, example=str(self.classes))
+                annotator = Annotator(_img_original, line_width=3, example=str(self.classes))
             for i, det in enumerate(pred):  # per image
-                s += '%gx%g ' % self._img_processed.shape[2:]  # print string
+                s += '%gx%g ' % _img_processed.shape[2:]  # print string
                 if len(det):
-                    # Rescale boxes from self._img_processed to self._img_original size
-                    det[:, :4] = scale_boxes(self._img_processed.shape[2:], det[:, :4], self._img_original.shape).round()
+                    # Rescale boxes from _img_processed to _img_original size
+                    det[:, :4] = scale_boxes(_img_processed.shape[2:], det[:, :4], _img_original.shape).round()
                     # Print results
                     for c in det[:, 5].unique():
                         n = (det[:, 5] == c).sum()  # detections per class
@@ -124,7 +132,7 @@ class yolo_v5(perception_wrapper):
 
                     # Stream results
                     if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-                        self._img_original = annotator.result()
+                        _img_original = annotator.result()
 
         self.get_logger().info(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms",throttle_duration_sec=1)
         
@@ -134,7 +142,7 @@ class yolo_v5(perception_wrapper):
         self.get_logger().debug(f'Total process time: %.1fms' % self.get_callback_time())
 
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-            self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(self._img_original))
+            self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(_img_original))
     
 
         if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:

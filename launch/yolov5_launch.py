@@ -25,6 +25,8 @@ import launch_ros.actions
 
 def generate_launch_description():
 
+    # 'weights/yolov5s.engine'
+
     model_launch_arg = DeclareLaunchArgument(
         "model", default_value=TextSubstitution(
         text=PathJoinSubstitution([
