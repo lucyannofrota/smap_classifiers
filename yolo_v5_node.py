@@ -6,7 +6,7 @@ from sensor_msgs.msg import Image
 from smap_perception_wrapper.perception_wrapper import perception_wrapper, main
 #from smap_perception_wrapper.perception_wrapper import main
 #from smap_perception_wrapper.smap_perception_wrapper import perception_wrapper, main
-from smap_interfaces.msg import SmapData, SmapObject, SmapDetections
+from smap_interfaces.msg import SmapObject, SmapDetections
 
 import torch
 import numpy as np

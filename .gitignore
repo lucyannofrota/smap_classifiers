@@ -3577,3 +3577,5 @@ LICENSE
 models/* 
 utils/* 
 data/* 
+
+COLCON_IGNORE
