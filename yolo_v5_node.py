@@ -34,7 +34,7 @@ class yolo_v5(perception_wrapper):
         self.imgsz=(640, 640)
 
         # NMS
-        self.conf_thres=0.35  # confidence threshold
+        self.conf_thres=0.4  # confidence threshold
         self.iou_thres=0.45  # NMS IOU threshold
         self.max_det=1000  # maximum detections per image
         self.agnostic_nms=False  # class-agnostic NMS
@@ -124,6 +124,7 @@ class yolo_v5(perception_wrapper):
                         obj.label = c
                         obj.bounding_box_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
                         obj.bounding_box_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
+                        obj.confidence = int(conf*100)
                         objects.append(obj)
 
                         # Add bbox to image
