@@ -122,8 +122,8 @@ class yolo_v5(perception_wrapper):
                         label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
                         obj = SmapObject()
                         obj.label = c
-                        obj.bounding_box_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
-                        obj.bounding_box_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
+                        obj.bb_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
+                        obj.bb_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
                         obj.confidence = int(conf*100)
                         objects.append(obj)
 
