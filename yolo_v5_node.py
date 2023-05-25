@@ -55,7 +55,7 @@ class yolo_v5(perception_wrapper):
     def initialization(self):
         if super().initialization():  
             # TODO: Debug parameter
-            self.publisher_debug_image=self.create_publisher(Image, '/smap/perception/predictions/debug', 10,callback_group=self._reentrant_cb_group)
+            self.publisher_debug_image=self.create_publisher(Image, self.get_namespace()+'/perception/predictions/debug', 10,callback_group=self._reentrant_cb_group)
             return True
         return False
 

@@ -50,13 +50,15 @@ def generate_launch_description():
     yolo_v5_node = launch_ros.actions.Node(
             package='smap_yolo_v5',
             executable='yolo_v5_node.py',
+            name='perception_yolo_v5',
+            namespace='smap',
             parameters=[{
                 "model": LaunchConfiguration('model'),
                 "model_description": LaunchConfiguration('model_description')
             }],
             output='screen',
             arguments=['--ros-args', '--log-level', 'debug'],
-            emulate_tty=True
+            emulate_tty=True,
     )
 
     return LaunchDescription([
