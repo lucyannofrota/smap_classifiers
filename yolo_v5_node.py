@@ -99,7 +99,7 @@ class yolo_v5(perception_wrapper):
         # nms
         with self.nms_tim:
             try:
-                pred_probs = yolo_v5.non_max_suppression(pred, self.conf_thres, self.iou_thres, self.agnostic_nms, max_det=self.max_det)
+                pred = yolo_v5.non_max_suppression(pred, self.conf_thres, self.iou_thres, self.agnostic_nms, max_det=self.max_det)
             except (Exception, RuntimeError)  as e:
                 self.get_logger().error("yolo_v5/predict/nms")
         # Apply Classifier
@@ -113,7 +113,8 @@ class yolo_v5(perception_wrapper):
             s=''
             if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
                 annotator = Annotator(_img_original, line_width=3, example=str(self.classes))
-            for i, det in enumerate(pred_probs):  # per image
+
+            for i, det in enumerate(pred):  # per image
                 s += '%gx%g ' % _img_processed.shape[2:]  # print string
                 if len(det):
                     # Rescale boxes from _img_processed to _img_original size
@@ -136,7 +137,7 @@ class yolo_v5(perception_wrapper):
                         obj.bb_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
                         obj.bb_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
                         obj.confidence = float(conf)
-                        obj.probability_distribution = probs_ = [float(p) for p in probs]
+                        obj.probability_distribution = [float(p) for p in probs]
                         objects.append(obj)
 
                         # Add bbox to image
@@ -181,7 +182,6 @@ class yolo_v5(perception_wrapper):
         Returns:
             list of detections, on (n,6) tensor per image [xyxy, conf, cls]
         """
-        # TODO: Remove x
         # Checks
         if isinstance(prediction, (list, tuple)):  # YOLOv5 model in validation model, output = (inference_out, loss_out)
             prediction = prediction[0]  # select only inference output
@@ -200,7 +200,7 @@ class yolo_v5(perception_wrapper):
         merge = False  # use merge-NMS
 
         t = time.time()
-        mi = 5 + nc  # mask start index
+        # mi = 5 + nc  # mask start index
         # output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
         output_probs = [torch.zeros((0, 6 + nm + nc), device=prediction.device)] * bs
         for xi, probs in enumerate(prediction):  # image index, image inference
@@ -217,11 +217,24 @@ class yolo_v5(perception_wrapper):
 
             # Box/Mask
             box = xywh2xyxy(probs[:, :4])  # center_x, center_y, width, height) to (x1, y1, x2, y2)
-            mask = probs[:, mi:]  # zero columns if no masks
+            # mask = probs[:, mi:]  # zero columns if no masks
 
             # Detections matrix nx6 (xyxy, conf, cls)
-            conf, j = probs[:, 5:mi].max(1, keepdim=True)
-            probs = torch.cat((box, conf, j.float(), mask, probs[:,5:mi]), 1)[conf.view(-1) > conf_thres]
+            # Softmax applied to class probabilities
+            conf, j = probs[:, 5:].max(1, keepdim=True)
+            # probs = torch.cat((box, conf, j.float(), mask, probs[:,5:mi]), 1)[conf.view(-1) > conf_thres]
+
+            # a = torch.tensor([[2,2],[4,4]])
+
+            # b = torch.tensor([4,6])
+            # torch.transpose(b,0,1)
+
+            # c = torch.div(a.transpose(0,1),b).transpose(0,1)
+
+            # new_probs = (torch.div(probs[:,5:].transpose(0,1),probs[:,5:].sum(1))).transpose(0,1)
+            # probs = torch.cat((box, conf, j.float(), new_probs), 1)[conf.view(-1) > conf_thres]
+            probs = torch.cat((box, conf, j.float(), (torch.div(probs[:,5:].transpose(0,1),probs[:,5:].sum(1))).transpose(0,1)), 1)[conf.view(-1) > conf_thres]
+            # probs = torch.cat((box, conf, j.float(), mask, torch.softmax(probs[:,5:mi],1)), 1)[conf.view(-1) > conf_thres]
             # x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
 
             # Check shape
