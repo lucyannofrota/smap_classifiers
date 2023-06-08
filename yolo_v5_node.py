@@ -10,12 +10,16 @@ from smap_interfaces.msg import SmapObject, SmapDetections
 
 import torch
 import numpy as np
+import torchvision
+import time
 
 # ultralytics
 from models.common import DetectMultiBackend
 from utils.plots import colors
 from utils.plots import Annotator, colors
-from utils.general import check_img_size, non_max_suppression, scale_boxes
+from utils.general import check_img_size, scale_boxes, xywh2xyxy
+from utils.metrics import box_iou
+
 
 # TODO: Separar pre-processing. inference e nms
 
@@ -45,6 +49,10 @@ class yolo_v5(perception_wrapper):
         self.inference_vals = []
         self.nms_vals = []
         self.post_vals = []
+
+        # Checks
+        assert 0 <= self.conf_thres <= 1, f'Invalid Confidence threshold {self.conf_thres}, valid values are between 0.0 and 1.0'
+        assert 0 <= self.iou_thres <= 1, f'Invalid IoU {self.iou_thres}, valid values are between 0.0 and 1.0'
 
 
         # TODO: Create parameter
@@ -91,10 +99,9 @@ class yolo_v5(perception_wrapper):
         # nms
         with self.nms_tim:
             try:
-                pred = non_max_suppression(pred, self.conf_thres, self.iou_thres, None, self.agnostic_nms, max_det=self.max_det)
+                pred_probs = yolo_v5.non_max_suppression(pred, self.conf_thres, self.iou_thres, self.agnostic_nms, max_det=self.max_det)
             except (Exception, RuntimeError)  as e:
                 self.get_logger().error("yolo_v5/predict/nms")
-
         # Apply Classifier
         #print('Classify')
         #if self.classify:
@@ -106,7 +113,7 @@ class yolo_v5(perception_wrapper):
             s=''
             if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
                 annotator = Annotator(_img_original, line_width=3, example=str(self.classes))
-            for i, det in enumerate(pred):  # per image
+            for i, det in enumerate(pred_probs):  # per image
                 s += '%gx%g ' % _img_processed.shape[2:]  # print string
                 if len(det):
                     # Rescale boxes from _img_processed to _img_original size
@@ -117,7 +124,11 @@ class yolo_v5(perception_wrapper):
                         s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                     # Write results
-                    for *xyxy, conf, cls in reversed(det):
+                    for x1, y1, x2, y2, conf, cls, *probs in reversed(det):
+                        xyxy = [x1, y1, x2, y2]
+                        # *xyxy: [tensor(182., device='cuda:0'), tensor(209., device='cuda:0'), tensor(233., device='cuda:0'), tensor(233., device='cuda:0')]
+                        # conf: tensor(0.56210, device='cuda:0')
+                        # cls: tensor(64., device='cuda:0')
                         c = int(cls)  # integer class
                         label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
                         obj = SmapObject()
@@ -155,6 +166,96 @@ class yolo_v5(perception_wrapper):
         resp_msg.objects = objects
 
         return resp_msg
+    
+    def non_max_suppression(
+        prediction,
+        conf_thres=0.25,
+        iou_thres=0.45,
+        agnostic=False,
+        max_det=300,
+        nm=0,  # number of masks
+    ):
+        """Non-Maximum Suppression (NMS) on inference results to reject overlapping detections
+
+        Returns:
+            list of detections, on (n,6) tensor per image [xyxy, conf, cls]
+        """
+        # TODO: Remove x
+        # Checks
+        if isinstance(prediction, (list, tuple)):  # YOLOv5 model in validation model, output = (inference_out, loss_out)
+            prediction = prediction[0]  # select only inference output
+
+        # device = prediction.device
+        bs = prediction.shape[0]  # batch size
+        nc = prediction.shape[2] - nm - 5  # number of classes
+        xc = prediction[..., 4] > conf_thres  # candidates
+
+        # Settings
+        # min_wh = 2  # (pixels) minimum box width and height
+        max_wh = 7680  # (pixels) maximum box width and height
+        max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
+        time_limit = 0.5 + 0.05 * bs  # seconds to quit after
+        redundant = True  # require redundant detections
+        merge = False  # use merge-NMS
+
+        t = time.time()
+        mi = 5 + nc  # mask start index
+        output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
+        output_probs = [torch.zeros((0, 6 + nm + nc), device=prediction.device)] * bs
+        for xi, x in enumerate(prediction):  # image index, image inference
+            # Apply constraints
+            # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
+            x = x[xc[xi]]  # confidence
+
+            # If none remain process next image
+            if not x.shape[0]:
+                continue
+
+            # Compute conf
+            x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+
+            # Box/Mask
+            box = xywh2xyxy(x[:, :4])  # center_x, center_y, width, height) to (x1, y1, x2, y2)
+            mask = x[:, mi:]  # zero columns if no masks
+
+            # Detections matrix nx6 (xyxy, conf, cls)
+            conf, j = x[:, 5:mi].max(1, keepdim=True)
+            probs = torch.cat((box, conf, j.float(), mask, x[:,5:mi]), 1)[conf.view(-1) > conf_thres]
+            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+
+            # Check shape
+            # n = x.shape[0]  # number of boxes
+            n = probs.shape[0]  # number of boxes
+            if not n:  # no boxes
+                continue
+            # x_idxs = x[:, 4].argsort(descending=True)[:max_nms] # sort by confidence and remove excess boxes
+            x_idxs = probs[:, 4].argsort(descending=True)[:max_nms] # sort by confidence and remove excess boxes
+            x = x[x_idxs]
+            probs = probs[x_idxs]
+
+            # Batched NMS
+            # c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
+            c = probs[:, 5:6] * (0 if agnostic else max_wh)  # classes
+            # boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
+            boxes, scores = probs[:, :4] + c, probs[:, 4]  # boxes (offset by class), scores
+            i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+            i = i[:max_det]  # limit detections
+            if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
+                # update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
+                iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
+                weights = iou * scores[None]  # box weights
+                x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
+                probs[i, :4] = torch.mm(weights, probs[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
+                if redundant:
+                    i = i[iou.sum(1) > 1]  # require redundancy
+
+            output[xi] = x[i]
+            output_probs[xi] = probs[i]
+            if (time.time() - t) > time_limit:
+                # LOGGER.warning(f'WARNING ⚠️ NMS time limit {time_limit:.3f}s exceeded')
+                break  # time limit exceeded
+
+        return output_probs
 
     def mean_spead_metrics(self, pre_processing_tim, inference_tim, nms_tim, post_processing_tim):
         if len(self.pre_vals) >= 128:
