@@ -135,7 +135,8 @@ class yolo_v5(perception_wrapper):
                         obj.label = c
                         obj.bb_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
                         obj.bb_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
-                        obj.confidence = int(conf*100)
+                        obj.confidence = float(conf)
+                        obj.probability_distribution = probs_ = [float(p) for p in probs]
                         objects.append(obj)
 
                         # Add bbox to image
@@ -200,28 +201,28 @@ class yolo_v5(perception_wrapper):
 
         t = time.time()
         mi = 5 + nc  # mask start index
-        output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
+        # output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
         output_probs = [torch.zeros((0, 6 + nm + nc), device=prediction.device)] * bs
-        for xi, x in enumerate(prediction):  # image index, image inference
+        for xi, probs in enumerate(prediction):  # image index, image inference
             # Apply constraints
             # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
-            x = x[xc[xi]]  # confidence
+            probs = probs[xc[xi]]  # confidence
 
             # If none remain process next image
-            if not x.shape[0]:
+            if not probs.shape[0]:
                 continue
 
             # Compute conf
-            x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+            probs[:, 5:] *= probs[:, 4:5]  # conf = obj_conf * cls_conf
 
             # Box/Mask
-            box = xywh2xyxy(x[:, :4])  # center_x, center_y, width, height) to (x1, y1, x2, y2)
-            mask = x[:, mi:]  # zero columns if no masks
+            box = xywh2xyxy(probs[:, :4])  # center_x, center_y, width, height) to (x1, y1, x2, y2)
+            mask = probs[:, mi:]  # zero columns if no masks
 
             # Detections matrix nx6 (xyxy, conf, cls)
-            conf, j = x[:, 5:mi].max(1, keepdim=True)
-            probs = torch.cat((box, conf, j.float(), mask, x[:,5:mi]), 1)[conf.view(-1) > conf_thres]
-            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+            conf, j = probs[:, 5:mi].max(1, keepdim=True)
+            probs = torch.cat((box, conf, j.float(), mask, probs[:,5:mi]), 1)[conf.view(-1) > conf_thres]
+            # x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
 
             # Check shape
             # n = x.shape[0]  # number of boxes
@@ -230,7 +231,7 @@ class yolo_v5(perception_wrapper):
                 continue
             # x_idxs = x[:, 4].argsort(descending=True)[:max_nms] # sort by confidence and remove excess boxes
             x_idxs = probs[:, 4].argsort(descending=True)[:max_nms] # sort by confidence and remove excess boxes
-            x = x[x_idxs]
+            # x = x[x_idxs]
             probs = probs[x_idxs]
 
             # Batched NMS
@@ -244,12 +245,12 @@ class yolo_v5(perception_wrapper):
                 # update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
                 iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
                 weights = iou * scores[None]  # box weights
-                x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
+                probs[i, :4] = torch.mm(weights, probs[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
                 probs[i, :4] = torch.mm(weights, probs[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
                 if redundant:
                     i = i[iou.sum(1) > 1]  # require redundancy
 
-            output[xi] = x[i]
+            # output[xi] = x[i]
             output_probs[xi] = probs[i]
             if (time.time() - t) > time_limit:
                 # LOGGER.warning(f'WARNING ⚠️ NMS time limit {time_limit:.3f}s exceeded')
