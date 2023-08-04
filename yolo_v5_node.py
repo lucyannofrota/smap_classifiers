@@ -63,7 +63,7 @@ class yolo_v5(perception_wrapper):
     def initialization(self):
         if super().initialization():  
             # TODO: Debug parameter
-            self.publisher_debug_image=self.create_publisher(Image, self.get_namespace()+'/perception/predictions/debug', 10,callback_group=self._reentrant_cb_group)
+            self.publisher_debug_image=self.create_publisher(Image, self.get_namespace()+'/perception/annotated_predictions', 10,callback_group=self._reentrant_cb_group)
             return True
         return False
 
@@ -109,9 +109,10 @@ class yolo_v5(perception_wrapper):
 
         # Process detections
         objects = []
+        create_annotation = self.publisher_debug_image.get_subscription_count() > 0
         with self.post_processing_tim:
             s=''
-            if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+            if create_annotation:
                 annotator = Annotator(_img_original, line_width=3, example=str(self.classes))
 
             for i, det in enumerate(pred):  # per image
@@ -141,11 +142,11 @@ class yolo_v5(perception_wrapper):
                         objects.append(obj)
 
                         # Add bbox to image
-                        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+                        if create_annotation:
                             annotator.box_label(xyxy, label, color=colors(c, True))
 
                     # Stream results
-                    if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+                    if create_annotation:
                         _img_original = annotator.result()
 
         self.get_logger().info(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms",throttle_duration_sec=1)
@@ -155,12 +156,11 @@ class yolo_v5(perception_wrapper):
         self.get_logger().debug('Total process time: {:0.1f}ms | Should be capable of: {:0.1f} fps'.format(self.get_callback_time(),1E3/self.get_callback_time()))
         self.get_logger().debug(f'Total process time: %.1fms' % self.get_callback_time())
 
-        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
+        if create_annotation:
             self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(_img_original))
     
 
-        if self.get_logger().get_effective_level() == self.get_logger().get_effective_level().DEBUG:
-            self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
+        self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
         
         # self.detections.publish(resp_msg)
 

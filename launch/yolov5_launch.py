@@ -57,7 +57,8 @@ def generate_launch_description():
                 "model_description": LaunchConfiguration('model_description')
             }],
             output='screen',
-            arguments=['--ros-args', '--log-level', 'debug'],
+        #     arguments=['--ros-args', '--log-level', 'debug'],
+            arguments=['--ros-args', '--log-level', 'info'],
             emulate_tty=True,
     )
 
