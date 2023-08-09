@@ -52,6 +52,8 @@ install(DIRECTORY
 # Install Python executables
 install(PROGRAMS
   yolo_v5_node.py
+  yolo_v5_even_node.py
+  yolo_v5_odd_node.py
   #scripts/yolo_v5_node.py
   DESTINATION lib/${PROJECT_NAME}
 )

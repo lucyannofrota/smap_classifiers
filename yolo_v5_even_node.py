@@ -12,6 +12,7 @@ import torch
 import numpy as np
 import torchvision
 import time
+import math
 
 # ultralytics
 from models.common import DetectMultiBackend
@@ -25,7 +26,7 @@ from utils.metrics import box_iou
 
 class yolo_v5(perception_wrapper):
 
-    def __init__(self,detector_name='yolo_v5'):
+    def __init__(self,detector_name='yolo_v5_even'):
         super().__init__(
             detector_name=detector_name,
             detector_type='object',
@@ -87,21 +88,21 @@ class yolo_v5(perception_wrapper):
                 if len(_img_processed.shape) == 3:
                     _img_processed = _img_processed[None]  # expand for batch dim
         except (Exception, RuntimeError)  as e:
-            self.get_logger().error("yolo_v5/predict/pre_processing")
+            self.get_logger().error("{}/predict/pre_processing".format(self.detector_name))
 
         # inference
         with self.inference_tim:
             try:
                 pred = self.model(_img_processed, augment=False)
             except (Exception, RuntimeError)  as e:
-                self.get_logger().error("yolo_v5/predict/inference")
+                self.get_logger().error("{}/predict/inference".format(self.detector_name))
 
         # nms
         with self.nms_tim:
             try:
                 pred = yolo_v5.non_max_suppression(pred, self.conf_thres, self.iou_thres, self.agnostic_nms, max_det=self.max_det)
             except (Exception, RuntimeError)  as e:
-                self.get_logger().error("yolo_v5/predict/nms")
+                self.get_logger().error("{}/predict/nms".format(self.detector_name))
         # Apply Classifier
         #print('Classify')
         #if self.classify:
@@ -122,6 +123,8 @@ class yolo_v5(perception_wrapper):
                     det[:, :4] = scale_boxes(_img_processed.shape[2:], det[:, :4], _img_original.shape).round()
                     # Print results
                     for c in det[:, 5].unique():
+                        if math.floor(c/5) % 2 != 0:
+                            continue
                         n = (det[:, 5] == c).sum()  # detections per class
                         s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
 
@@ -133,6 +136,8 @@ class yolo_v5(perception_wrapper):
                         # cls: tensor(64., device='cuda:0')
                         c = int(cls)  # integer class
                         label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
+                        if math.floor(c/5) % 2 != 0:
+                            continue
                         obj = SmapObject()
                         obj.label = c
                         obj.bb_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
@@ -330,6 +335,6 @@ class yolo_v5(perception_wrapper):
 if __name__ == '__main__':
 
     detector_args = {
-        'name': 'yolo_v5'
+        'name': 'yolo_v5_even'
     }
     main(detector_class=yolo_v5,detector_args=detector_args)
