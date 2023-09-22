@@ -74,7 +74,7 @@ class yolo_v5(perception_wrapper):
         #msg.pointcloud
 
         # pre-processing
-        with self.total_total_processing_tim:
+        with self.total_processing_tim:
             try:
                 with self.pre_processing_tim:
                     _img_original = self._cv_bridge.imgmsg_to_cv2(msg.rgb_image, "bgr8")
