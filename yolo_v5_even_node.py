@@ -74,105 +74,106 @@ class yolo_v5(perception_wrapper):
         #msg.pointcloud
 
         # pre-processing
-        try:
-            with self.pre_processing_tim:
-                _img_original = self._cv_bridge.imgmsg_to_cv2(msg.rgb_image, "bgr8")
-                _img_processed = self.letterbox(_img_original, self.imgsz, stride=self.stride, auto=self.model.pt)[0]  # padded resize
-
-                _img_processed = _img_processed.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
-                _img_processed = np.ascontiguousarray(_img_processed)  # contiguous
-
-                _img_processed = torch.from_numpy(_img_processed).to(self.model.device)
-                _img_processed = _img_processed.half() if self.model.fp16 else _img_processed.float()  # uint8 to fp16/32
-                _img_processed /= 255  # 0 - 255 to 0.0 - 1.0
-                if len(_img_processed.shape) == 3:
-                    _img_processed = _img_processed[None]  # expand for batch dim
-        except (Exception, RuntimeError)  as e:
-            self.get_logger().error("{}/predict/pre_processing".format(self.detector_name))
-
-        # inference
-        with self.inference_tim:
+        with self.total_total_processing_tim:
             try:
-                pred = self.model(_img_processed, augment=False)
+                with self.pre_processing_tim:
+                    _img_original = self._cv_bridge.imgmsg_to_cv2(msg.rgb_image, "bgr8")
+                    _img_processed = self.letterbox(_img_original, self.imgsz, stride=self.stride, auto=self.model.pt)[0]  # padded resize
+
+                    _img_processed = _img_processed.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+                    _img_processed = np.ascontiguousarray(_img_processed)  # contiguous
+
+                    _img_processed = torch.from_numpy(_img_processed).to(self.model.device)
+                    _img_processed = _img_processed.half() if self.model.fp16 else _img_processed.float()  # uint8 to fp16/32
+                    _img_processed /= 255  # 0 - 255 to 0.0 - 1.0
+                    if len(_img_processed.shape) == 3:
+                        _img_processed = _img_processed[None]  # expand for batch dim
             except (Exception, RuntimeError)  as e:
-                self.get_logger().error("{}/predict/inference".format(self.detector_name))
+                self.get_logger().error("{}/predict/pre_processing".format(self.detector_name))
 
-        # nms
-        with self.nms_tim:
-            try:
-                pred = yolo_v5.non_max_suppression(pred, self.conf_thres, self.iou_thres, self.agnostic_nms, max_det=self.max_det)
-            except (Exception, RuntimeError)  as e:
-                self.get_logger().error("{}/predict/nms".format(self.detector_name))
-        # Apply Classifier
-        #print('Classify')
-        #if self.classify:
-        #    pred = apply_classifier(pred, self.modelc, img, pred)
+            # inference
+            with self.inference_tim:
+                try:
+                    pred = self.model(_img_processed, augment=False)
+                except (Exception, RuntimeError)  as e:
+                    self.get_logger().error("{}/predict/inference".format(self.detector_name))
 
-        # Process detections
-        objects = []
-        create_annotation = self.publisher_debug_image.get_subscription_count() > 0
-        with self.post_processing_tim:
-            s=''
-            if create_annotation:
-                annotator = Annotator(_img_original, line_width=3, example=str(self.classes))
+            # nms
+            with self.nms_tim:
+                try:
+                    pred = yolo_v5.non_max_suppression(pred, self.conf_thres, self.iou_thres, self.agnostic_nms, max_det=self.max_det)
+                except (Exception, RuntimeError)  as e:
+                    self.get_logger().error("{}/predict/nms".format(self.detector_name))
+            # Apply Classifier
+            #print('Classify')
+            #if self.classify:
+            #    pred = apply_classifier(pred, self.modelc, img, pred)
 
-            for i, det in enumerate(pred):  # per image
-                s += '%gx%g ' % _img_processed.shape[2:]  # print string
-                if len(det):
-                    # Rescale boxes from _img_processed to _img_original size
-                    det[:, :4] = scale_boxes(_img_processed.shape[2:], det[:, :4], _img_original.shape).round()
-                    # Print results
-                    for c in det[:, 5].unique():
-                        if math.floor(c/5) % 2 != 0:
-                            continue
-                        n = (det[:, 5] == c).sum()  # detections per class
-                        s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
+            # Process detections
+            objects = []
+            create_annotation = self.publisher_debug_image.get_subscription_count() > 0
+            with self.post_processing_tim:
+                s=''
+                if create_annotation:
+                    annotator = Annotator(_img_original, line_width=3, example=str(self.classes))
 
-                    # Write results
-                    for x1, y1, x2, y2, conf, cls, *probs in reversed(det):
-                        xyxy = [x1, y1, x2, y2]
-                        # *xyxy: [tensor(182., device='cuda:0'), tensor(209., device='cuda:0'), tensor(233., device='cuda:0'), tensor(233., device='cuda:0')]
-                        # conf: tensor(0.56210, device='cuda:0')
-                        # cls: tensor(64., device='cuda:0')
-                        c = int(cls)  # integer class
-                        label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
-                        if math.floor(c/5) % 2 != 0:
-                            continue
-                        obj = SmapObject()
-                        obj.label = c
-                        obj.bb_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
-                        obj.bb_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
-                        obj.confidence = float(conf)
-                        obj.probability_distribution = [float(p) for p in probs]
-                        objects.append(obj)
+                for i, det in enumerate(pred):  # per image
+                    s += '%gx%g ' % _img_processed.shape[2:]  # print string
+                    if len(det):
+                        # Rescale boxes from _img_processed to _img_original size
+                        det[:, :4] = scale_boxes(_img_processed.shape[2:], det[:, :4], _img_original.shape).round()
+                        # Print results
+                        for c in det[:, 5].unique():
+                            if math.floor(c/5) % 2 != 0:
+                                continue
+                            n = (det[:, 5] == c).sum()  # detections per class
+                            s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-                        # Add bbox to image
+                        # Write results
+                        for x1, y1, x2, y2, conf, cls, *probs in reversed(det):
+                            xyxy = [x1, y1, x2, y2]
+                            # *xyxy: [tensor(182., device='cuda:0'), tensor(209., device='cuda:0'), tensor(233., device='cuda:0'), tensor(233., device='cuda:0')]
+                            # conf: tensor(0.56210, device='cuda:0')
+                            # cls: tensor(64., device='cuda:0')
+                            c = int(cls)  # integer class
+                            label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
+                            if math.floor(c/5) % 2 != 0:
+                                continue
+                            obj = SmapObject()
+                            obj.label = c
+                            obj.bb_2d.keypoint_1 = [int(xyxy[0]),int(xyxy[1])]
+                            obj.bb_2d.keypoint_2 = [int(xyxy[2]),int(xyxy[3])]
+                            obj.confidence = float(conf)
+                            obj.probability_distribution = [float(p) for p in probs]
+                            objects.append(obj)
+
+                            # Add bbox to image
+                            if create_annotation:
+                                annotator.box_label(xyxy, label, color=colors(c, True))
+
+                        # Stream results
                         if create_annotation:
-                            annotator.box_label(xyxy, label, color=colors(c, True))
+                            _img_original = annotator.result()
 
-                    # Stream results
-                    if create_annotation:
-                        _img_original = annotator.result()
+            self.get_logger().info(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms",throttle_duration_sec=1)
+            
+            # Print results
+            self.get_logger().debug(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms nms, %.1fms post-processing | per image at shape {(1, 3, *self.imgsz)}' % (self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t))
+            self.get_logger().debug('Total process time: {:0.1f}ms | Should be capable of: {:0.1f} fps'.format(self.get_callback_time(),1E3/self.get_callback_time()))
+            self.get_logger().debug(f'Total process time: %.1fms' % self.get_callback_time())
 
-        self.get_logger().info(f"{s}{'' if len(det) else '(no detections), '}{self.inference_tim.t:.1f}ms",throttle_duration_sec=1)
+            if create_annotation:
+                self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(_img_original))
         
-        # Print results
-        self.get_logger().debug(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms nms, %.1fms post-processing | per image at shape {(1, 3, *self.imgsz)}' % (self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t))
-        self.get_logger().debug('Total process time: {:0.1f}ms | Should be capable of: {:0.1f} fps'.format(self.get_callback_time(),1E3/self.get_callback_time()))
-        self.get_logger().debug(f'Total process time: %.1fms' % self.get_callback_time())
 
-        if create_annotation:
-            self.publisher_debug_image.publish(self._cv_bridge.cv2_to_imgmsg(_img_original))
-    
+            self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
+            
+            # self.detections.publish(resp_msg)
 
-        self.mean_spead_metrics(self.pre_processing_tim.t, self.inference_tim.t, self.nms_tim.t, self.post_processing_tim.t)
-        
-        # self.detections.publish(resp_msg)
+            resp_msg = SmapDetections()
+            resp_msg.objects = objects
 
-        resp_msg = SmapDetections()
-        resp_msg.objects = objects
-
-        return resp_msg
+            return resp_msg
     
     def non_max_suppression(
         prediction,
