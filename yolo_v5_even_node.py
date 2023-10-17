@@ -124,7 +124,13 @@ class yolo_v5(perception_wrapper):
                         det[:, :4] = scale_boxes(_img_processed.shape[2:], det[:, :4], _img_original.shape).round()
                         # Print results
                         for c in det[:, 5].unique():
-                            if math.floor(c/5) % 2 != 0:
+                            jump = False
+                            for j in range(8):
+                                k = 2*j+1 # Indexes to be rejected k*5 -> (k+1)*5-1
+                                if(c >= k*5 and c <= (k+1)*5-1):
+                                    jump = True
+                                    break
+                            if jump:
                                 continue
                             n = (det[:, 5] == c).sum()  # detections per class
                             s += f"{n} {self.classes[int(c)]}{'s' * (n > 1)}, "  # add to string
