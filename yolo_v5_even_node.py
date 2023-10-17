@@ -137,7 +137,13 @@ class yolo_v5(perception_wrapper):
                             # cls: tensor(64., device='cuda:0')
                             c = int(cls)  # integer class
                             label = None if self.hide_labels else (self.classes[c] if self.hide_conf else f'{self.classes[c]} {conf:.2f}')
-                            if math.floor(c/5) % 2 != 0:
+                            jump = False
+                            for j in range(8):
+                                k = 2*j+1 # Indexes to be rejected k*5 -> (k+1)*5-1
+                                if(c >= k*5 and c <= (k+1)*5-1):
+                                    jump = True
+                                    break
+                            if jump:
                                 continue
                             obj = SmapObject()
                             obj.label = c
